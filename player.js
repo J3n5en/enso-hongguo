@@ -1,6 +1,6 @@
 // Custom player chrome over a plain <video>; playback/MSE stays in index.html.
 window.createPlayer = function createPlayer(root, video, opts) {
-  const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
+  const SPEEDS = [0.75, 1, 1.25, 1.5, 2, 2.5, 3];
   const icon = {
     play: '<path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/>',
     pause: '<path d="M7 5h3.2v14H7zM13.8 5H17v14h-3.2z"/>',
