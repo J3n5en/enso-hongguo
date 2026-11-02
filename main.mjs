@@ -90,7 +90,23 @@ export function activate(enso) {
   enso.renderer.handle('search', (a) => {
     const q = String(a?.q ?? '').trim().slice(0, 100);
     if (!q) return { items: [], hasMore: false };
-    return list((c) => c.search(q, { cursor: a?.cursor || undefined }));
+    // 综合搜索不返回 cover_url；getSeries 只带回封面，不带分集列表
+    return list((c) => c.search(q, { cursor: a?.cursor || undefined })).then(async (result) => {
+      const missing = result.items.filter((s) => s.id && !s.cover);
+      if (!missing.length) return result;
+      const c = await client();
+      await Promise.all(
+        missing.map((s) =>
+          c
+            .getSeries(s.id)
+            .then((full) => {
+              if (full?.cover_url) s.cover = full.cover_url;
+            })
+            .catch(() => {})
+        )
+      );
+      return result;
+    });
   });
 
   // compact tuples [id, number, playable, title?] keep 1000+ episode series under 64KB
