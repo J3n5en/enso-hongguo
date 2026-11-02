@@ -503,6 +503,7 @@
         playToken++;
         player.exitFull();
         video.pause();
+        video.srcObject = null;
         video.removeAttribute('src');
         video.load();
       }
@@ -561,7 +562,8 @@
         if (useMse) {
           ms = new MS();
           if (window.ManagedMediaSource && ms instanceof ManagedMediaSource) video.disableRemotePlayback = true;
-          video.src = URL.createObjectURL(ms);
+          // WebKit rejects MediaSource blob URLs in opaque-origin (sandboxed) frames; Chromium rejects MediaSource as srcObject.
+          try { video.srcObject = ms; } catch { video.src = URL.createObjectURL(ms); }
           await new Promise((r) => ms.addEventListener('sourceopen', r, { once: true }));
           if (token !== playToken) return;
           sb = ms.addSourceBuffer(mime);
@@ -587,6 +589,7 @@
             await appended(sb);
             if (ms.readyState === 'open') ms.endOfStream();
           } else {
+            video.srcObject = null;
             video.src = URL.createObjectURL(new Blob(parts, { type: 'video/mp4' }));
             if (startAt) video.currentTime = startAt;
           }
@@ -604,7 +607,7 @@
       }
 
       video.addEventListener('error', () => {
-        if (video.getAttribute('src')) $('playError').textContent = `播放失败：${video.error?.message || video.error?.code || ''}`;
+        if (video.getAttribute('src') || video.srcObject) $('playError').textContent = `播放失败：${video.error?.message || video.error?.code || ''}`;
       });
       video.addEventListener('loadedmetadata', () => {
         if (video.videoWidth) video.style.aspectRatio = `${video.videoWidth} / ${video.videoHeight}`;
