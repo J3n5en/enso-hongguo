@@ -2,6 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
+    <link rel="stylesheet" href="player.css" />
     <style>
       :root {
         color-scheme: light dark;
@@ -55,10 +56,6 @@
       .muted { color: var(--muted); font-size: 12px; }
       .error { color: #cf222e; font-size: 12px; margin: 6px 0; white-space: pre-wrap; }
       .more { display: block; margin: 12px auto; }
-      video {
-        display: block; width: 100%; max-height: 65vh; aspect-ratio: 9 / 16;
-        background: #000; border-radius: 8px;
-      }
       .title { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .desc { margin: 8px 0; font-size: 12px; color: var(--muted); }
       .eps { display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 6px; margin-top: 8px; }
@@ -112,11 +109,8 @@
       <div class="bar">
         <button id="back" type="button">‹ 返回</button>
         <span class="title" id="seriesTitle"></span>
-        <select id="quality">
-          <option>360p</option><option>480p</option><option>540p</option><option>720p</option><option>1080p</option>
-        </select>
       </div>
-      <video id="video" controls playsinline autoplay></video>
+      <div id="player"><video id="video" playsinline autoplay></video></div>
       <div class="bar" style="margin: 6px 0 0">
         <span class="muted" id="status" style="flex: 1"></span>
         <label class="muted"><input type="checkbox" id="auto" checked /> 自动下一集</label>
@@ -126,6 +120,7 @@
       <div class="eps" id="eps"></div>
     </section>
 
+    <script src="player.js"></script>
     <script>
       const $ = (id) => document.getElementById(id);
       const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -375,13 +370,26 @@
       let episodes = [];
       let current = null;
       let playToken = 0;
-      $('quality').value = store.get('quality', '720p');
+      const QUALITIES = ['360p', '480p', '540p', '720p', '1080p'];
+      let quality = store.get('quality', '720p');
+      if (!QUALITIES.includes(quality)) quality = '720p';
       $('auto').checked = store.get('auto', true);
       $('auto').onchange = () => store.set('auto', $('auto').checked);
-      $('quality').onchange = () => {
-        store.set('quality', $('quality').value);
-        if (current) play(current, video.currentTime);
-      };
+      const nextOf = (ep) => ep && episodes.find((e) => e.number > ep.number && e.playable);
+      const player = createPlayer($('player'), video, {
+        qualities: QUALITIES,
+        quality: () => quality,
+        setQuality: (q) => {
+          quality = q;
+          store.set('quality', q);
+          if (current) play(current, video.currentTime);
+        },
+        onNext: () => {
+          const next = nextOf(current);
+          if (next) play(next);
+        },
+        duration: () => dur,
+      });
 
       function show(detail) {
         $('home').hidden = detail;
@@ -482,14 +490,18 @@
         if (!current) return;
         remember({ finished: true });
         if (!$('auto').checked) return;
-        const next = episodes.find((e) => e.number > current.number && e.playable);
-        if (next) play(next);
+        const next = nextOf(current);
+        if (next) {
+          player.flash(`第${next.number}集`);
+          play(next);
+        }
       });
 
       function stop() {
         remember();
         current = null;
         playToken++;
+        player.exitFull();
         video.pause();
         video.removeAttribute('src');
         video.load();
@@ -509,6 +521,9 @@
         const token = ++playToken;
         current = ep;
         pos = startAt;
+        player.setTitle(`第${ep.number}集${ep.title ? ` · ${ep.title}` : ''}`, series?.title ?? '');
+        player.setHasNext(Boolean(nextOf(ep)));
+        player.loading(true);
         const h = loadHistory().find((r) => r.id === series?.id);
         dur = h?.number === ep.number ? h.duration || 0 : 0;
         for (const b of $('eps').children) b.classList.toggle('on', b.dataset.id === ep.id);
@@ -517,9 +532,9 @@
         remember();
         let info;
         try {
-          info = await call('open', { episodeId: ep.id, quality: $('quality').value }, 0);
+          info = await call('open', { episodeId: ep.id, quality }, 0);
         } catch (e) {
-          if (token === playToken) { $('playError').textContent = e.message; $('status').textContent = ''; }
+          if (token === playToken) { $('playError').textContent = e.message; $('status').textContent = ''; player.loading(false); }
           return;
         }
         if (token !== playToken) return;
@@ -571,7 +586,7 @@
       function prefetch(ep) {
         if (!$('auto').checked) return;
         const next = episodes.find((e) => e.number > ep.number && e.playable);
-        if (next) call('open', { episodeId: next.id, quality: $('quality').value }, 1).catch(() => {});
+        if (next) call('open', { episodeId: next.id, quality }, 1).catch(() => {});
       }
 
       video.addEventListener('error', () => {
