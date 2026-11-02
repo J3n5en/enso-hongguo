@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      :root {
+        color-scheme: light dark;
+        --fg: #1f2328;
+        --muted: #6e7781;
+        --line: #d0d7de;
+        --card: rgba(0, 0, 0, 0.04);
+        --accent: #e5484d;
+      }
+      :root[data-theme='dark'] {
+        --fg: #e6edf3;
+        --muted: #8b949e;
+        --line: #30363d;
+        --card: rgba(255, 255, 255, 0.05);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 10px;
+        font: 13px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        color: var(--fg);
+        background: transparent;
+      }
+      button, input, select {
+        font: inherit;
+        color: inherit;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: transparent;
+      }
+      button { padding: 3px 10px; cursor: pointer; }
+      .bar { display: flex; gap: 6px; margin-bottom: 10px; align-items: center; }
+      .bar input { flex: 1; min-width: 0; padding: 4px 8px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; }
+      .card { cursor: pointer; }
+      .card .img {
+        aspect-ratio: 3 / 4;
+        border-radius: 6px;
+        background: var(--card) center / cover no-repeat;
+        position: relative;
+      }
+      .card .badge {
+        position: absolute; right: 4px; bottom: 4px; padding: 0 5px; border-radius: 4px;
+        font-size: 11px; color: #fff; background: rgba(0, 0, 0, 0.55);
+      }
+      .card .t {
+        margin-top: 4px; font-size: 12px; overflow: hidden;
+        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+      }
+      h3 { margin: 4px 0 8px; font-size: 13px; color: var(--muted); font-weight: 500; }
+      .muted { color: var(--muted); font-size: 12px; }
+      .error { color: #cf222e; font-size: 12px; margin: 6px 0; white-space: pre-wrap; }
+      .more { display: block; margin: 12px auto; }
+      video {
+        display: block; width: 100%; max-height: 65vh; aspect-ratio: 9 / 16;
+        background: #000; border-radius: 8px;
+      }
+      .title { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .desc { margin: 8px 0; font-size: 12px; color: var(--muted); }
+      .eps { display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 6px; margin-top: 8px; }
+      .eps button { padding: 4px 0; }
+      .eps button.on { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+      .eps button.seen:not(.on) { color: var(--muted); background: var(--card); }
+      .eps button:disabled { opacity: 0.35; cursor: default; }
+      .head { display: flex; align-items: baseline; justify-content: space-between; }
+      .link { border: 0; padding: 0; color: var(--muted); font-size: 12px; }
+      .row { display: flex; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); cursor: pointer; }
+      .row .img { width: 48px; flex: none; }
+      .row .info { flex: 1; min-width: 0; }
+      .row .info .t { margin: 0; -webkit-line-clamp: 1; }
+      .row .x { border: 0; color: var(--muted); padding: 2px 6px; }
+      .prog { height: 3px; margin-top: 4px; border-radius: 2px; background: var(--card); overflow: hidden; }
+      .prog i { display: block; height: 100%; background: var(--accent); }
+      [hidden] { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <section id="home">
+      <div class="bar">
+        <input id="q" placeholder="搜索短剧，回车" />
+        <button id="reset" type="button">推荐</button>
+        <button id="openHistory" type="button">历史</button>
+      </div>
+      <div id="recent" hidden>
+        <div class="head"><h3>继续观看</h3><button class="link" id="allHistory" type="button">全部 ›</button></div>
+        <div class="grid" id="recentGrid"></div>
+        <h3 style="margin-top: 14px" id="listTitle">推荐</h3>
+      </div>
+      <div id="homeError" class="error"></div>
+      <div class="grid" id="grid"></div>
+      <button id="more" class="more" type="button" hidden>加载更多</button>
+    </section>
+
+    <section id="history" hidden>
+      <div class="bar">
+        <button id="historyBack" type="button">‹ 返回</button>
+        <span class="title">观看历史</span>
+        <button id="clearHistory" type="button">清空</button>
+      </div>
+      <div class="bar" style="margin-top: 0">
+        <span class="muted" id="cacheInfo">缓存计算中…</span>
+        <button id="clearCache" type="button" hidden>清理缓存</button>
+      </div>
+      <div id="historyList"></div>
+    </section>
+
+    <section id="detail" hidden>
+      <div class="bar">
+        <button id="back" type="button">‹ 返回</button>
+        <span class="title" id="seriesTitle"></span>
+        <select id="quality">
+          <option>360p</option><option>480p</option><option>540p</option><option>720p</option><option>1080p</option>
+        </select>
+      </div>
+      <video id="video" controls playsinline autoplay></video>
+      <div class="bar" style="margin: 6px 0 0">
+        <span class="muted" id="status" style="flex: 1"></span>
+        <label class="muted"><input type="checkbox" id="auto" checked /> 自动下一集</label>
+      </div>
+      <div id="playError" class="error"></div>
+      <div class="desc" id="desc"></div>
+      <div class="eps" id="eps"></div>
+    </section>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+      const store = {
+        get: (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
+        set: (k, v) => localStorage.setItem(k, JSON.stringify(v)),
+      };
+
+      // Host allows 10 UI calls/s per plugin; pace calls and let playback jump the queue.
+      const queue = [];
+      let pumping = false;
+      const call = (method, args, priority = 1) =>
+        new Promise((resolve, reject) => {
+          queue.push({ method, args, priority, resolve, reject, tries: 0 });
+          queue.sort((a, b) => a.priority - b.priority);
+          pump();
+        });
+      async function pump() {
+        if (pumping) return;
+        pumping = true;
+        while (queue.length) {
+          const job = queue.shift();
+          enso.call(job.method, job.args).then(job.resolve, async (e) => {
+            if (/频繁|RATE_LIMITED|连续失败|CIRCUIT/.test(e.message) && job.tries++ < 20) {
+              await sleep(/连续失败|CIRCUIT/.test(e.message) ? 3000 : 400);
+              queue.unshift(job);
+              pump();
+            } else job.reject(e);
+          });
+          await sleep(120);
+        }
+        pumping = false;
+      }
+
+      // ---------- covers ----------
+      const covers = new Map();
+      const coverQueue = [];
+      let coverBusy = 0;
+      const observer = new IntersectionObserver((entries) => {
+        for (const en of entries) if (en.isIntersecting) { observer.unobserve(en.target); coverQueue.push(en.target); }
+        drainCovers();
+      }, { rootMargin: '200px' });
+      async function drainCovers() {
+        while (coverBusy < 2 && coverQueue.length) {
+          const el = coverQueue.shift();
+          const url = el.dataset.cover;
+          coverBusy++;
+          (covers.has(url) ? Promise.resolve(covers.get(url)) : call('cover', { url }, 2).catch(() => null))
+            .then((data) => {
+              if (data) { covers.set(url, data); el.style.backgroundImage = `url("${data}")`; }
+            })
+            .finally(() => { coverBusy--; drainCovers(); });
+        }
+      }
+
+      function card(s, badge) {
+        const el = document.createElement('div');
+        el.className = 'card';
+        el.title = s.description || s.title;
+        const img = document.createElement('div');
+        img.className = 'img';
+        if (badge) {
+          const b = document.createElement('span');
+          b.className = 'badge';
+          b.textContent = badge;
+          img.append(b);
+        }
+        if (s.cover) {
+          img.dataset.cover = s.cover;
+          if (covers.has(s.cover)) img.style.backgroundImage = `url("${covers.get(s.cover)}")`;
+          else observer.observe(img);
+        }
+        const t = document.createElement('div');
+        t.className = 't';
+        t.textContent = s.title;
+        el.append(img, t);
+        el.onclick = () => openSeries(s);
+        return el;
+      }
+
+      // ---------- home ----------
+      let feed = { method: 'discover', q: '', cursor: '', seen: new Set(), token: 0 };
+      async function loadFeed(reset) {
+        if (reset) {
+          feed = { method: feed.method, q: feed.q, cursor: '', seen: new Set(), token: feed.token + 1 };
+          $('grid').replaceChildren();
+        }
+        const token = feed.token;
+        $('homeError').textContent = '';
+        $('more').hidden = true;
+        const status = document.createElement('div');
+        status.className = 'muted';
+        status.textContent = '加载中…';
+        $('grid').after(status);
+        try {
+          const page = await call(feed.method, { q: feed.q, cursor: feed.cursor || undefined });
+          if (token !== feed.token) return;
+          for (const s of page.items) {
+            if (feed.seen.has(s.id)) continue;
+            feed.seen.add(s.id);
+            $('grid').append(card(s, s.count ? `${s.count}集` : ''));
+          }
+          feed.cursor = page.cursor;
+          $('more').hidden = !page.hasMore;
+          if (!$('grid').children.length) $('homeError').textContent = feed.q ? '没有搜到结果' : '没有内容';
+        } catch (e) {
+          if (token === feed.token) { $('homeError').textContent = e.message; $('more').hidden = false; }
+        } finally {
+          status.remove();
+        }
+      }
+      function renderRecent() {
+        const recent = loadHistory();
+        $('recent').hidden = !recent.length;
+        $('recentGrid').replaceChildren(...recent.slice(0, 6).map((r) => card(r, `第${r.number}集`)));
+        $('listTitle').textContent = feed.q ? `搜索：${feed.q}` : '推荐';
+      }
+
+      // ---------- history ----------
+      // entry: { id, title, description, cover, count, number, time, duration, at, watched: [numbers] }
+      const HISTORY_MAX = 50;
+      const loadHistory = () => store.get('recent', []);
+      const saveHistory = (list) => store.set('recent', list.slice(0, HISTORY_MAX));
+      const clock = (s) => {
+        s = Math.max(0, Math.floor(s || 0));
+        return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+      };
+      const ago = (at) => {
+        const m = Math.floor((Date.now() - at) / 60000);
+        if (m < 1) return '刚刚';
+        if (m < 60) return `${m} 分钟前`;
+        if (m < 1440) return `${Math.floor(m / 60)} 小时前`;
+        return `${Math.floor(m / 1440)} 天前`;
+      };
+      function renderHistory() {
+        const list = loadHistory();
+        $('clearHistory').hidden = !list.length;
+        if (!list.length) {
+          const empty = document.createElement('div');
+          empty.className = 'muted';
+          empty.textContent = '还没有观看记录';
+          $('historyList').replaceChildren(empty);
+          return;
+        }
+        $('historyList').replaceChildren(
+          ...list.map((h) => {
+            const row = document.createElement('div');
+            row.className = 'row card';
+            const img = card(h).querySelector('.img');
+            const info = document.createElement('div');
+            info.className = 'info';
+            const t = document.createElement('div');
+            t.className = 't';
+            t.textContent = h.title;
+            const meta = document.createElement('div');
+            meta.className = 'muted';
+            const total = h.count ? ` / 共${h.count}集` : '';
+            meta.textContent = `看到第${h.number}集 ${clock(h.time)}${total} · ${ago(h.at)}`;
+            const prog = document.createElement('div');
+            prog.className = 'prog';
+            const bar = document.createElement('i');
+            bar.style.width = `${h.duration ? Math.min(100, (h.time / h.duration) * 100) : 0}%`;
+            prog.append(bar);
+            info.append(t, meta, prog);
+            const x = document.createElement('button');
+            x.className = 'x';
+            x.textContent = '×';
+            x.title = '删除这条记录';
+            x.onclick = (e) => {
+              e.stopPropagation();
+              saveHistory(loadHistory().filter((r) => r.id !== h.id));
+              renderHistory();
+            };
+            row.append(img, info, x);
+            row.onclick = () => openSeries(h);
+            return row;
+          })
+        );
+      }
+      function showHistory() {
+        $('home').hidden = true;
+        $('history').hidden = false;
+        renderHistory();
+        refreshCache();
+        window.scrollTo(0, 0);
+      }
+      $('openHistory').onclick = showHistory;
+      $('allHistory').onclick = showHistory;
+      $('historyBack').onclick = () => show(false);
+      const mb = (n) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1048576).toFixed(1)} MB`);
+      async function refreshCache() {
+        const info = await call('cache', {}, 1);
+        $('cacheInfo').textContent = info
+          ? `缓存 ${mb(info.bytes)} · ${Math.floor(info.videos / 2)} 集视频 · ${info.covers} 张封面`
+          : '缓存信息暂时取不到';
+        $('clearCache').hidden = !info?.bytes;
+      }
+      let cacheArmed = 0;
+      $('clearCache').onclick = async () => {
+        const btn = $('clearCache');
+        if (Date.now() - cacheArmed > 3000) {
+          cacheArmed = Date.now();
+          btn.textContent = '确认清理';
+          setTimeout(() => (btn.textContent = '清理缓存'), 3000);
+          return;
+        }
+        cacheArmed = 0;
+        btn.textContent = '清理缓存';
+        await call('cache', { clear: true }, 2);
+        refreshCache();
+      };
+      // sandbox has no allow-modals, so confirm() is unavailable: click twice instead
+      let clearArmed = 0;
+      $('clearHistory').onclick = () => {
+        const btn = $('clearHistory');
+        if (Date.now() - clearArmed > 3000) {
+          clearArmed = Date.now();
+          btn.textContent = '确认清空';
+          setTimeout(() => (btn.textContent = '清空'), 3000);
+          return;
+        }
+        clearArmed = 0;
+        btn.textContent = '清空';
+        saveHistory([]);
+        renderHistory();
+      };
+      $('q').addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' || e.isComposing) return;
+        const q = $('q').value.trim();
+        feed.method = q ? 'search' : 'discover';
+        feed.q = q;
+        renderRecent();
+        loadFeed(true);
+      });
+      $('reset').onclick = () => {
+        $('q').value = '';
+        feed.method = 'discover';
+        feed.q = '';
+        renderRecent();
+        loadFeed(true);
+      };
+      $('more').onclick = () => loadFeed(false);
+
+      // ---------- detail / player ----------
+      const video = $('video');
+      let series = null;
+      let episodes = [];
+      let current = null;
+      let playToken = 0;
+      $('quality').value = store.get('quality', '720p');
+      $('auto').checked = store.get('auto', true);
+      $('auto').onchange = () => store.set('auto', $('auto').checked);
+      $('quality').onchange = () => {
+        store.set('quality', $('quality').value);
+        if (current) play(current, video.currentTime);
+      };
+
+      function show(detail) {
+        $('home').hidden = detail;
+        $('history').hidden = true;
+        $('detail').hidden = !detail;
+        if (!detail) {
+          stop();
+          renderRecent();
+        }
+        window.scrollTo(0, 0);
+      }
+      $('back').onclick = () => show(false);
+
+      async function openSeries(s) {
+        series = s;
+        episodes = [];
+        current = null;
+        $('seriesTitle').textContent = s.title;
+        $('desc').textContent = s.description || '';
+        $('eps').replaceChildren();
+        $('playError').textContent = '';
+        $('status').textContent = '加载分集…';
+        show(true);
+        try {
+          const rows = await call('episodes', { seriesId: s.id });
+          episodes = rows.map(([id, number, playable, title]) => ({ id, number, playable: Boolean(playable), title }));
+        } catch (e) {
+          $('playError').textContent = e.message;
+          return;
+        }
+        if (series !== s) return;
+        const last = loadHistory().find((r) => r.id === s.id);
+        const seen = new Set(last?.watched ?? []);
+        $('eps').replaceChildren(
+          ...episodes.map((ep) => {
+            const b = document.createElement('button');
+            b.textContent = ep.number;
+            b.title = ep.title || `第${ep.number}集`;
+            b.disabled = !ep.playable;
+            b.dataset.id = ep.id;
+            b.classList.toggle('seen', seen.has(ep.number));
+            b.onclick = () => play(ep, resumeAt(ep));
+            return b;
+          })
+        );
+        let ep = episodes.find((e) => e.number === last?.number && e.playable);
+        // last episode was finished: continue from the next one
+        if (ep && last.duration && last.time >= last.duration - 3) ep = episodes.find((e) => e.number > ep.number && e.playable) ?? ep;
+        ep ??= episodes.find((e) => e.playable);
+        if (ep) play(ep, resumeAt(ep));
+        else $('status').textContent = '没有可播放的分集';
+      }
+
+      function resumeAt(ep) {
+        const h = loadHistory().find((r) => r.id === series?.id);
+        if (!h || h.number !== ep.number || !h.time) return 0;
+        return h.duration && h.time >= h.duration - 3 ? 0 : h.time;
+      }
+
+      // pos only tracks real playback of `current`; src swaps reset currentTime and must not overwrite it
+      let pos = 0;
+      let dur = 0;
+      function remember({ finished = false } = {}) {
+        if (!series || !current) return;
+        const list = loadHistory();
+        const prev = list.find((r) => r.id === series.id);
+        const watched = new Set(prev?.watched ?? []);
+        const duration = Math.floor(dur || 0);
+        if (finished || (duration && pos >= duration * 0.9)) watched.add(current.number);
+        const entry = {
+          id: series.id,
+          title: series.title,
+          description: series.description?.slice(0, 120),
+          cover: series.cover,
+          count: episodes.length || series.count || prev?.count,
+          number: current.number,
+          time: Math.floor(finished ? duration : pos),
+          duration,
+          at: Date.now(),
+          watched: [...watched].sort((a, b) => a - b),
+        };
+        saveHistory([entry, ...list.filter((r) => r.id !== series.id)]);
+        const b = [...$('eps').children].find((x) => x.dataset.id === current.id);
+        if (b && watched.has(current.number)) b.classList.add('seen');
+      }
+      const tracking = () => !video.seeking && video.readyState >= 2 && video.getAttribute('src');
+      video.addEventListener('pause', () => {
+        if (tracking()) { pos = video.currentTime; remember(); }
+      });
+      let lastSave = 0;
+      video.addEventListener('timeupdate', () => {
+        if (!tracking()) return;
+        pos = video.currentTime;
+        if (Date.now() - lastSave > 5000) { lastSave = Date.now(); remember(); }
+      });
+      window.addEventListener('pagehide', () => remember());
+      video.addEventListener('ended', () => {
+        if (!current) return;
+        remember({ finished: true });
+        if (!$('auto').checked) return;
+        const next = episodes.find((e) => e.number > current.number && e.playable);
+        if (next) play(next);
+      });
+
+      function stop() {
+        remember();
+        current = null;
+        playToken++;
+        video.pause();
+        video.removeAttribute('src');
+        video.load();
+      }
+
+      const mimeOf = (codec) =>
+        `video/mp4; codecs="${/^(hvc1|hev1)$/.test(codec) ? `${codec}.1.6.L120.90` : 'avc1.64001f'},mp4a.40.2"`;
+      const b64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+      const appended = (sb) => new Promise((r) => (sb.updating ? sb.addEventListener('updateend', r, { once: true }) : r()));
+      const ahead = () => {
+        const b = video.buffered;
+        return b.length ? b.end(b.length - 1) - video.currentTime : 0;
+      };
+
+      async function play(ep, startAt = 0) {
+        if (current && current.id !== ep.id) remember();
+        const token = ++playToken;
+        current = ep;
+        pos = startAt;
+        const h = loadHistory().find((r) => r.id === series?.id);
+        dur = h?.number === ep.number ? h.duration || 0 : 0;
+        for (const b of $('eps').children) b.classList.toggle('on', b.dataset.id === ep.id);
+        $('playError').textContent = '';
+        $('status').textContent = `第${ep.number}集 · 解析中…`;
+        remember();
+        let info;
+        try {
+          info = await call('open', { episodeId: ep.id, quality: $('quality').value }, 0);
+        } catch (e) {
+          if (token === playToken) { $('playError').textContent = e.message; $('status').textContent = ''; }
+          return;
+        }
+        if (token !== playToken) return;
+        if (info.duration) dur = info.duration;
+        const label = `第${ep.number}集 · ${info.definition}`;
+        const mime = mimeOf(info.codec);
+        const useMse = window.MediaSource && MediaSource.isTypeSupported(mime);
+        let sb = null;
+        let ms = null;
+        const parts = [];
+        if (useMse) {
+          ms = new MediaSource();
+          video.src = URL.createObjectURL(ms);
+          await new Promise((r) => ms.addEventListener('sourceopen', r, { once: true }));
+          if (token !== playToken) return;
+          sb = ms.addSourceBuffer(mime);
+          if (startAt) video.currentTime = startAt;
+        }
+        let offset = 0;
+        try {
+          for (;;) {
+            if (token !== playToken) return;
+            if (sb && ahead() > 90) { await sleep(1000); continue; }
+            const r = await call('chunk', { episodeId: info.episodeId, definition: info.definition, offset }, 0);
+            if (token !== playToken) return;
+            if (r.data) {
+              const bytes = b64(r.data);
+              if (sb) { await appended(sb); sb.appendBuffer(bytes); await appended(sb); }
+              else parts.push(bytes);
+              offset = r.next;
+              $('status').textContent = `${label} · 已缓冲 ${(offset / 1048576).toFixed(1)}MB`;
+            }
+            if (r.done) break;
+          }
+          if (sb) {
+            await appended(sb);
+            if (ms.readyState === 'open') ms.endOfStream();
+          } else {
+            video.src = URL.createObjectURL(new Blob(parts, { type: 'video/mp4' }));
+            if (startAt) video.currentTime = startAt;
+          }
+          $('status').textContent = label;
+          prefetch(ep);
+        } catch (e) {
+          if (token === playToken) $('playError').textContent = e.message;
+        }
+      }
+
+      function prefetch(ep) {
+        if (!$('auto').checked) return;
+        const next = episodes.find((e) => e.number > ep.number && e.playable);
+        if (next) call('open', { episodeId: next.id, quality: $('quality').value }, 1).catch(() => {});
+      }
+
+      video.addEventListener('error', () => {
+        if (video.getAttribute('src')) $('playError').textContent = `播放失败：${video.error?.message || video.error?.code || ''}`;
+      });
+      video.addEventListener('loadedmetadata', () => {
+        if (video.videoWidth) video.style.aspectRatio = `${video.videoWidth} / ${video.videoHeight}`;
+      });
+      video.addEventListener('durationchange', () => {
+        if (Number.isFinite(video.duration) && video.duration > 0) dur = video.duration;
+      });
+
+      renderRecent();
+      loadFeed(true);
+    </script>
+  </body>
+</html>

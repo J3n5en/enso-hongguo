@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "local.hongguo",
+  "name": "红果短剧",
+  "version": "0.1.0",
+  "description": "在侧栏里浏览、搜索并播放红果短剧（基于 openhongguo 匿名 SDK）。仅供学习研究。",
+  "main": "main.mjs",
+  "permissions": ["ui.view"],
+  "contributes": {
+    "views": [{ "id": "player", "title": "红果短剧", "entry": "index.html" }],
+    "methods": [
+      { "name": "discover", "timeoutMs": 30000 },
+      { "name": "search", "timeoutMs": 30000 },
+      { "name": "episodes", "timeoutMs": 30000 },
+      { "name": "cover", "timeoutMs": 20000 },
+      { "name": "open", "timeoutMs": 60000 },
+      { "name": "chunk", "timeoutMs": 15000 },
+      { "name": "cache", "timeoutMs": 20000 }
+    ]
+  }
+}

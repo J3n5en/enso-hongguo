@@ -1,0 +1,3 @@
+# node_modules is committed on purpose: EnsoCode installs plugins as-is and never runs npm install
+.DS_Store
+*.zip
