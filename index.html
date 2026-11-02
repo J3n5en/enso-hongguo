@@ -511,6 +511,18 @@
         `video/mp4; codecs="${/^(hvc1|hev1)$/.test(codec) ? `${codec}.1.6.L120.90` : 'avc1.64001f'},mp4a.40.2"`;
       const b64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
       const appended = (sb) => new Promise((r) => (sb.updating ? sb.addEventListener('updateend', r, { once: true }) : r()));
+      async function append(sb, bytes, token) {
+        for (;;) {
+          await appended(sb);
+          try { sb.appendBuffer(bytes); return appended(sb); } catch (e) {
+            if (e.name !== 'QuotaExceededError' || token !== playToken) throw e;
+          }
+          const behind = video.currentTime - 10;
+          if (sb.buffered.length && behind > sb.buffered.start(0)) { sb.remove(0, behind); await appended(sb); }
+          await sleep(1000);
+          if (token !== playToken) return;
+        }
+      }
       const ahead = () => {
         const b = video.buffered;
         return b.length ? b.end(b.length - 1) - video.currentTime : 0;
@@ -541,12 +553,14 @@
         if (info.duration) dur = info.duration;
         const label = `第${ep.number}集 · ${info.definition}`;
         const mime = mimeOf(info.codec);
-        const useMse = window.MediaSource && MediaSource.isTypeSupported(mime);
+        const MS = window.ManagedMediaSource || window.MediaSource;
+        const useMse = MS && MS.isTypeSupported(mime);
         let sb = null;
         let ms = null;
         const parts = [];
         if (useMse) {
-          ms = new MediaSource();
+          ms = new MS();
+          if (window.ManagedMediaSource && ms instanceof ManagedMediaSource) video.disableRemotePlayback = true;
           video.src = URL.createObjectURL(ms);
           await new Promise((r) => ms.addEventListener('sourceopen', r, { once: true }));
           if (token !== playToken) return;
@@ -562,7 +576,7 @@
             if (token !== playToken) return;
             if (r.data) {
               const bytes = b64(r.data);
-              if (sb) { await appended(sb); sb.appendBuffer(bytes); await appended(sb); }
+              if (sb) await append(sb, bytes, token);
               else parts.push(bytes);
               offset = r.next;
               $('status').textContent = `${label} · 已缓冲 ${(offset / 1048576).toFixed(1)}MB`;
